@@ -1,0 +1,3 @@
+<?php
+
+$playlist=loadFilesIn('rock');
