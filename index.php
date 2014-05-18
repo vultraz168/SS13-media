@@ -88,9 +88,9 @@ class Main {
 
 		if(isset($_GET['playlist'])) {
 			$tracks = self::getTracks($playlists,$_GET['playlist']);
-			echo json_encode($tracks);
+			echo json_encode($tracks,JSON_PRETTY_PRINT);
 		} else {
-			echo json_encode($playlists);
+			echo json_encode($playlists,JSON_PRETTY_PRINT);
 		}
 	}
 
