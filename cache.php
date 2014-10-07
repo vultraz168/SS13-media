@@ -1,33 +1,30 @@
 <?php
 
-class Cache {
+class Cache
+{
 
-	public function isFileCached($path) {
+    public static function isCached($objname)
+    {
+        return file_exists(self::getFileName($objname));
+    }
 
-		$md5 = md5($path);
-		return (glob(Config::getCacheDir().$md5.".json.cache")) ? true : false;
+    private static function getFileName($objname)
+    {
+        return Config::getCacheDir() . "/{$objname}.json";
+    }
 
-	}
+    public static function setCacheData($objname, $data)
+    {
+        $file = self::getFileName($objname);
 
-	public function cacheData($path,$data) {
+        file_put_contents($file, json_encode($data));
+    }
 
-		$md5 = md5($path);
-		$file = Config::getCacheDir().$md5.".json.cache";
+    public static function getCacheData($objname)
+    {
+        $file = self::getFileName($objname);
 
-		$handle = fopen($file,"w");
-		fwrite($handle, json_encode($data));
-
-	}
-
-	public function getCacheData($path) {
-
-		$md5 = md5($path);
-		$file = Config::getCacheDir().$md5.".json.cache";
-
-		$handle = fopen($file,"r");
-
-		return json_decode(fread($handle,filesize($file)));
-
-	}
+        return json_decode(file_get_contents($file), true);
+    }
 
 }
