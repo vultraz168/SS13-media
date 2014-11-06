@@ -1,4 +1,36 @@
 <?php
+function str_shuffle_unicode($str) {
+    $tmp = preg_split("//u", $str, -1, PREG_SPLIT_NO_EMPTY);
+    shuffle($tmp);
+    return join("", $tmp);
+}
+// HHVM shit
+set_error_handler(function($errorNumber, $message, $errfile, $errline)
+{
+    switch ($errorNumber) {
+        case E_ERROR :
+            $errorLevel = 'Error';
+            break;
+
+        case E_WARNING :
+            $errorLevel = 'Warning';
+            break;
+
+        case E_NOTICE :
+            $errorLevel = 'Notice';
+            break;
+
+        default :
+            $errorLevel = 'Undefined (' . $errorNumber . ')';
+    }
+
+    echo '<br /><b>' . $errorLevel . '</b>: ' . $message . ' in <b>' . $errfile . '</b> on line <b>' . $errline . '</b><br/>';
+});
+
+set_exception_handler(function($exception)
+{
+    echo "<b>Exception:</b> " . $exception->getMessage();
+});
 
 class Main
 {
@@ -17,6 +49,13 @@ class Main
         return md5($md5 . Config::API_KEY);
     }
 
+    private function getSetting($playlist, $key, $default)
+    {
+        if (!isset($this->playlists[$playlist][$key]))
+            return $default;
+        return $this->playlists[$playlist][$key];
+    }
+
     private function loadFileMetadata()
     {
         /*
@@ -28,8 +67,10 @@ class Main
          }
          */
         $file = Config::getPoolDir() . '/fileData.json';
-        if (!file_exists($file))
+        if (!file_exists($file)) {
             $this->error('Waiting for upload.');
+        }
+
         foreach (json_decode(file_get_contents($file),true) as $md5 => $fileInfo) {
             $cacheKey = "{$md5}.mp3";
             $file = $this->getPoolFilename($md5);
@@ -49,9 +90,22 @@ class Main
             $attr->url = Config::ROOT_URL . '/index.php?key=' . $this->calcAccessKey($md5) . '&get=' . $md5 . '&filetype=.mp3';
 
             foreach ($fileInfo['playlists'] as $playlist) {
-                if (!isset($this->playlists[$playlist]['tracks']))
+                if (!isset($this->playlists[$playlist]['tracks'])) {
                     $this->playlists[$playlist]['tracks'] = array();
-                $this->playlists[$playlist]['tracks'][] = $attr;
+                }
+                $cfgObfuscate = $this->getSetting($playlist, 'obfuscate', 'false') == 'true';
+                if ($cfgObfuscate) {
+                    $pl_attr = new stdClass();
+                    $pl_attr->length = $attr->length;
+                    $pl_attr->url = $attr->url;
+                    $pl_attr->title = $md5;
+                    $pl_attr->artist = isset($fileInfo['artist']) ? str_shuffle_unicode($fileInfo['artist'][0]) : 'NULL';
+                    $pl_attr->album = isset($fileInfo['album']) ? str_shuffle_unicode($fileInfo['album'][0]) : 'NULL';
+                    
+                    $this->playlists[$playlist]['tracks'][] = $pl_attr;
+                } else {
+                    $this->playlists[$playlist]['tracks'][] = $attr;
+                }
             }
         }
     }
@@ -107,9 +161,13 @@ class Main
                 Cache::setCacheData($plID, $plData);
             }
             header('Content-type: application/json');
-            echo json_encode($plData, JSON_PRETTY_PRINT);
+            $enc = json_encode($plData, JSON_PRETTY_PRINT);
+            if(!$enc) {
+                $this->error(json_last_error_msg());
+            }
+            echo $enc;
         } elseif (isset($_GET['get'])) {
-            $md5=$_GET['get'];
+            $md5 = $_GET['get'];
             if (!isset($_GET['key']) || $this->calcAccessKey($md5) != $_GET['key']) {
                 $this->error('Need key.');
             }

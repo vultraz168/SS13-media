@@ -1,10 +1,13 @@
 {
-    "rock" : [],
-    "jazz" : [],
-    "bar" : [],
-    "endgame" : [],
-    "emagged" : [],
-    "shuttle" : [],
-    "muzak" : [],
-    "trance" : []
+    "rock" : {},
+    "jazz" : {},
+    "bar" : {},
+    "endgame" : {},
+    "clockwork" : {},
+    "emagged" : {
+        "obfuscate":"true"
+    },
+    "shuttle" : {},
+    "muzak" : {},
+    "trance" : {}
 }
