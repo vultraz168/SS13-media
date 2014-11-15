@@ -1,9 +1,11 @@
 <?php
-function str_shuffle_unicode($str) {
+function str_shuffle_unicode($str)
+{
     $tmp = preg_split("//u", $str, -1, PREG_SPLIT_NO_EMPTY);
     shuffle($tmp);
     return join("", $tmp);
 }
+
 // HHVM shit
 set_error_handler(function($errorNumber, $message, $errfile, $errline)
 {
@@ -77,9 +79,9 @@ class Main
 
             $attr = new stdClass();
 
-            $attr->title = isset($fileInfo['title']) ? $fileInfo['title'][0] : '';
-            $attr->artist = isset($fileInfo['artist']) ? $fileInfo['artist'][0] : '';
-            $attr->album = isset($fileInfo['album']) ? $fileInfo['album'][0] : '';
+            $attr->title = isset($fileInfo['title']) ? $fileInfo['title'] : '';
+            $attr->artist = isset($fileInfo['artist']) ? $fileInfo['artist'] : '';
+            $attr->album = isset($fileInfo['album']) ? $fileInfo['album'] : '';
 
             if (isset($fileInfo['playtime_seconds'])) {
                 $attr->length = (string) floor(floatval($fileInfo['playtime_seconds']) * 10);
@@ -87,11 +89,14 @@ class Main
                 $attr->length = "";
             }
 
-            $attr->url = Config::ROOT_URL . '/index.php?key=' . $this->calcAccessKey($md5) . '&get=' . $md5 . '&filetype=.mp3';
+            $attr->url = Config::ROOT_URL . '/index.php?key=' . $this->calcAccessKey($md5) . '&get=' . $md5 . '&filetype=.m4a';
 
             foreach ($fileInfo['playlists'] as $playlist) {
                 if (!isset($this->playlists[$playlist]['tracks'])) {
                     $this->playlists[$playlist]['tracks'] = array();
+                }
+                if (!isset($this->playlists[$playlist]['orig-tracks'])) {
+                    $this->playlists[$playlist]['orig-tracks'] = array();
                 }
                 $cfgObfuscate = $this->getSetting($playlist, 'obfuscate', 'false') == 'true';
                 if ($cfgObfuscate) {
@@ -99,13 +104,15 @@ class Main
                     $pl_attr->length = $attr->length;
                     $pl_attr->url = $attr->url;
                     $pl_attr->title = $md5;
-                    $pl_attr->artist = isset($fileInfo['artist']) ? str_shuffle_unicode($fileInfo['artist'][0]) : 'NULL';
-                    $pl_attr->album = isset($fileInfo['album']) ? str_shuffle_unicode($fileInfo['album'][0]) : 'NULL';
-                    
+                    $pl_attr->artist = isset($fileInfo['artist']) ? str_shuffle_unicode($fileInfo['artist']) : 'NULL';
+                    $pl_attr->album = isset($fileInfo['album']) ? str_shuffle_unicode($fileInfo['album']) : 'NULL';
+
                     $this->playlists[$playlist]['tracks'][] = $pl_attr;
                 } else {
                     $this->playlists[$playlist]['tracks'][] = $attr;
                 }
+                $attr->md5 = $md5;
+                $this->playlists[$playlist]['orig-tracks'][] = $attr;
             }
         }
     }
@@ -114,7 +121,8 @@ class Main
     {
         $a = substr($md5, 0, 1);
         $b = substr($md5, 1, 1);
-        return Config::getPoolDir() . "/{$a}/{$b}/{$md5}.mp3";
+        $filename = substr($md5, 2);
+        return Config::getPoolDir() . "/{$a}/{$b}/{$filename}.m4a";
     }
 
     private function error($msg)
@@ -130,8 +138,10 @@ class Main
             die('Nope');
         }
         //header('Content-Description: File Transfer');
-        header('Content-Type: audio/mpeg');
-        header('Content-Disposition: inline; filename=' . basename($filename)); // attachment
+        //header('Content-Type: audio/mpeg');
+        header('Content-Type: audio/mp4');
+        header('Content-Disposition: inline; filename=' . basename($filename));
+        // attachment
         header('Expires: 0');
         header('Cache-Control: must-revalidate');
         header('Pragma: public');
@@ -139,31 +149,82 @@ class Main
         readfile($filename, false);
     }
 
+    private function playlistAsJson(array $plData)
+    {
+        header('Content-type: application/json');
+        $enc = json_encode($plData, JSON_PRETTY_PRINT);
+        if (!$enc) {
+            $this->error(json_last_error_msg());
+        }
+        return $enc;
+    }
+
+    private function playlistAsHTML($playlistID, array $plData)
+    {
+        header('Content-type: text/html');
+        $o = <<<HEAD
+<html>
+    <head>
+        <title>Playlist {$playlistID}</title>
+        <link href="/css/clean.css" rel="stylesheet" />
+    </head>
+    <body>
+        <h1>{$playlistID}</h1>
+        <table>
+            <tr>
+                <th>#</th>
+                <th>Title</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th>MD5</th>
+            </tr>
+HEAD;
+        //var_dump($plData);
+        foreach ($plData as $k => $entry) {
+            //var_dump($entry);
+            $title = !empty($entry['title']) ? htmlentities($entry['title']) : "&nbsp;";
+            $artist = !empty($entry['artist']) ? htmlentities($entry['artist']) : "&nbsp;";
+            $album = !empty($entry['album']) ? htmlentities($entry['album']) : "&nbsp;";
+            $md5 = $entry['md5'];
+            $o .= "<tr><th>$k</th><td>{$title}</td><td>{$artist}</td><td>{$album}</td><td>{$md5}</td></tr>";
+        }
+        $o .= '</table></body></html>';
+        return $o;
+    }
+
     public function run()
     {
 
         if (isset($_GET['playlist'])) {
-            if (Config::API_KEY != '') {
+            $type = filter_input(INPUT_GET, 'type');
+            $plID = filter_input(INPUT_GET, 'playlist');
+
+            if (Config::API_KEY != '' && $type != 'html') {
                 if (!isset($_GET['key']) || $_GET['key'] != Config::API_KEY) {
                     $this->error('Need key.');
                 }
             }
-            $plID = $_GET['playlist'];
             if (preg_match('/^[a-zA-Z0-9]+$/', $plID) == 0) {
                 $this->error('Bad request.');
             }
-            $plData = array();
-            if (Cache::isCached($plID)) {
-                $plData = Cache::getCacheData($plID);
-            } else {
+            $cache = array();
+            if (!Cache::isCached($plID)) {
                 $this->loadFileMetadata();
-                $plData = $this->playlists[$plID]['tracks'];
-                Cache::setCacheData($plID, $plData);
+                Cache::setCacheData($plID, $this->playlists[$plID]);
             }
-            header('Content-type: application/json');
-            $enc = json_encode($plData, JSON_PRETTY_PRINT);
-            if(!$enc) {
-                $this->error(json_last_error_msg());
+            $cache = Cache::getCacheData($plID);
+
+            $plData = $cache['tracks'];
+            $origData = $cache['orig-tracks'];
+            $enc = '';
+            switch($type) {
+                case 'html' :
+                    $enc = $this->playlistAsHTML($plID, $origData);
+                    break;
+                case 'json' :
+                default :
+                    $enc = $this->playlistAsJson($plData);
+                    break;
             }
             echo $enc;
         } elseif (isset($_GET['get'])) {
