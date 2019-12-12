@@ -1,14 +1,17 @@
 {
-    "rock" : {},
-    "jazz" : {},
-    "bar" : {},
-    "endgame" : {},
-    "clockwork" : {},
-    "emagged" : {
-        "obfuscate":"true"
+    "rock": {},
+    "jazz": {},
+    "bar": {},
+    "endgame": {},
+    "clockwork": {},
+    "emagged": {
+        "obfuscate": "true"
     },
-    "shuttle" : {},
-    "muzak" : {},
-    "trance" : {},
-    "keygen" : {}
+    "shuttle": {},
+    "muzak": {},
+    "trance": {},
+    "beach": {},
+    "delta": {},
+    "lobby": {},
+    "xmas": {}
 }

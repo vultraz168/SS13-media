@@ -18,6 +18,7 @@ class Cache
         $file = self::getFileName($objname);
 
         file_put_contents($file, json_encode($data));
+        //file_put_contents($file, serialize($data));
     }
 
     public static function getCacheData($objname)
@@ -25,6 +26,7 @@ class Cache
         $file = self::getFileName($objname);
 
         return json_decode(file_get_contents($file), true);
+        //return unserialize(file_get_contents($file));
     }
 
 }

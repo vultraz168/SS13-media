@@ -1,4 +1,8 @@
 <?php
+// I *fucking hate* CORS.
+if(isset($_SERVER['HTTP_ORIGIN']))
+    header('Access-Control-Allow-Origin: '.$_SERVER['HTTP_ORIGIN']);
+
 function str_shuffle_unicode($str)
 {
     $tmp = preg_split("//u", $str, -1, PREG_SPLIT_NO_EMPTY);
@@ -6,32 +10,59 @@ function str_shuffle_unicode($str)
     return join("", $tmp);
 }
 
-// HHVM shit
-set_error_handler(function($errorNumber, $message, $errfile, $errline)
-{
-    switch ($errorNumber) {
-        case E_ERROR :
-            $errorLevel = 'Error';
-            break;
+// ----------------------------------------------------------------------------------------------------
+// - Error Handler
+// ----------------------------------------------------------------------------------------------------
+$_ERRORTYPES = array(
+    0x0001 => 'E_ERROR',
+    0x0002 => 'E_WARNING',
+    0x0004 => 'E_PARSE',
+    0x0008 => 'E_NOTICE',
+    0x0010 => 'E_CORE_ERROR',
+    0x0020 => 'E_CORE_WARNING',
+    0x0040 => 'E_COMPILE_ERROR',
+    0x0080 => 'E_COMPILE_WARNING',
+    0x0100 => 'E_USER_ERROR',
+    0x0200 => 'E_USER_WARNING',
+    0x0400 => 'E_USER_NOTICE',
+    0x0800 => 'E_STRICT',
+    0x1000 => 'E_RECOVERABLE_ERROR',
+    0x2000 => 'E_DEPRECATED',
+    0x4000 => 'E_USER_DEPRECATED'
+);
+$_USE_JSON=false;
+$_ERRORS=[];
+function startsWith($haystack, $needle) {
+    return substr_compare($haystack, $needle, 0, strlen($needle)) === 0;
+}
+function endsWith($haystack, $needle) {
+    return substr_compare($haystack, $needle, -strlen($needle)) === 0;
+}
+if (!defined('ERROR_HANDLER_SET')) {
+    function ErrorHandler($type, $message, $file, $line)
+    {
+        global $_ERRORTYPES,$_USE_JSON, $_ERRORS;
+        if (!@is_string($name = @array_search($type, @array_flip($_ERRORS)))) {
+            $name = 'E_UNKNOWN';
+        };
+        $msg = ['name'=>$name, 'file'=>@basename($file), 'line'=>$line, 'message'=>$message];
+        if (endsWith($name, "_ERROR") || !$_USE_JSON) {
+            $msg=@sprintf("<div>%s in file <b>%s</b> at line %d: %s\n</div>", $name, @basename($file), $line, $message);
+        }
+        if (endsWith($name, "_ERROR")) {
+            die(json_encode(['errors'=>[$msg]]));
+        }
+        if ($_USE_JSON) {
+            $_ERRORS[]=$msg;
+        } else {
+            print($msg);
+        }
+    };
 
-        case E_WARNING :
-            $errorLevel = 'Warning';
-            break;
-
-        case E_NOTICE :
-            $errorLevel = 'Notice';
-            break;
-
-        default :
-            $errorLevel = 'Undefined (' . $errorNumber . ')';
-    }
-
-    echo '<br /><b>' . $errorLevel . '</b>: ' . $message . ' in <b>' . $errfile . '</b> on line <b>' . $errline . '</b><br/>';
-});
-
-set_exception_handler(function($exception)
-{
-    echo "<b>Exception:</b> " . $exception->getMessage();
+    $old_error_handler = set_error_handler("ErrorHandler");
+}
+set_exception_handler(function ($exception) {
+    die(json_encode(['errors'=>[['name'=>'EXCEPTION','message'=>$exception->getMessage(),'file'=>@basename($exception->getFile()), 'line'=>$exception->getLine()]]]));
 });
 
 class Main
@@ -40,21 +71,22 @@ class Main
 
     public function __construct()
     {
-        require ("../config.php");
-        require ("../cache.php");
+        require("../config.php");
+        require("../cache.php");
         ini_set('display_errors', 1);
         $this->playlists = json_decode(file_get_contents(Config::ROOT_PATH . '/playlists.json'), true);
     }
 
     private function calcAccessKey($md5)
     {
-        return md5($md5 . Config::API_KEY);
+        return strtoupper(md5($md5 . Config::API_KEY));
     }
 
     private function getSetting($playlist, $key, $default)
     {
-        if (!isset($this->playlists[$playlist][$key]))
+        if (!isset($this->playlists[$playlist][$key])) {
             return $default;
+        }
         return $this->playlists[$playlist][$key];
     }
 
@@ -69,15 +101,19 @@ class Main
          }
          */
         $file = Config::getPoolDir() . '/fileData.json';
-        if (!file_exists($file)) {
-            $this->error('Waiting for upload.');
-        }
+        /*if (!file_exists($file)) {
+            $this->error("Waiting for upload ($file missing).");
+        }*/
 
-        foreach (json_decode(file_get_contents($file),true) as $md5 => $fileInfo) {
-            $cacheKey = "{$md5}.mp3";
+        foreach (json_decode(file_get_contents($file), true) as $md5 => $fileInfo) {
+            $cacheKey = "{$md5}.".Config::EXT;
             $file = $this->getPoolFilename($md5);
 
             $attr = new stdClass();
+
+            if (isset($_GET['test'])) {
+                var_dump($fileInfo);
+            }
 
             $attr->title = isset($fileInfo['title']) ? $fileInfo['title'] : '';
             $attr->artist = isset($fileInfo['artist']) ? $fileInfo['artist'] : '';
@@ -89,7 +125,7 @@ class Main
                 $attr->length = "";
             }
 
-            $attr->url = Config::ROOT_URL . '/index.php?key=' . $this->calcAccessKey($md5) . '&get=' . $md5 . '&filetype=.m4a';
+            $attr->url = Config::ROOT_URL . '/index.php?key=' . $this->calcAccessKey($md5) . '&get=' . $md5 . '&filetype=.'.Config::EXT;
 
             foreach ($fileInfo['playlists'] as $playlist) {
                 if (!isset($this->playlists[$playlist]['tracks'])) {
@@ -122,7 +158,7 @@ class Main
         $a = substr($md5, 0, 1);
         $b = substr($md5, 1, 1);
         $filename = substr($md5, 2);
-        return Config::getPoolDir() . "/{$a}/{$b}/{$filename}.m4a";
+        return Config::getPoolDir() . "/{$a}/{$b}/{$filename}.".Config::EXT;
     }
 
     private function error($msg)
@@ -135,11 +171,11 @@ class Main
     {
         if (!file_exists($filename)) {
             header('HTTP/1.1 404 Not Found');
-            die('Nope');
+            die("File $filename not found.");
         }
         //header('Content-Description: File Transfer');
-        //header('Content-Type: audio/mpeg');
-        header('Content-Type: audio/mp4');
+        header('Content-Type: '.Config::MIME_TYPE);
+        //header('Content-Type: audio/mp4');
         header('Content-Disposition: inline; filename=' . basename($filename));
         // attachment
         header('Expires: 0');
@@ -186,6 +222,9 @@ HEAD;
             $artist = !empty($entry['artist']) ? htmlentities($entry['artist']) : "&nbsp;";
             $album = !empty($entry['album']) ? htmlentities($entry['album']) : "&nbsp;";
             $md5 = $entry['md5'];
+            if (isset($_GET['key']) && $_GET['key']==Config::API_KEY) {
+                $md5='<a href="'.$entry['url'].'">'.$md5.'</a>';
+            }
             $o .= "<tr><th>$k</th><td>{$title}</td><td>{$artist}</td><td>{$album}</td><td>{$md5}</td></tr>";
         }
         $o .= '</table></body></html>';
@@ -194,7 +233,6 @@ HEAD;
 
     public function run()
     {
-
         if (isset($_GET['playlist'])) {
             $type = filter_input(INPUT_GET, 'type');
             $plID = filter_input(INPUT_GET, 'playlist');
@@ -207,8 +245,11 @@ HEAD;
             if (preg_match('/^[a-zA-Z0-9]+$/', $plID) == 0) {
                 $this->error('Bad request.');
             }
+            if(!array_key_exists($plID, $this->playlists)){
+                $this->error('Playlist does not exist.');
+            }
             $cache = array();
-            if (!Cache::isCached($plID)) {
+            if (isset($_GET['reset_cache']) || !Cache::isCached($plID)) {
                 $this->loadFileMetadata();
                 Cache::setCacheData($plID, $this->playlists[$plID]);
             }
@@ -217,19 +258,19 @@ HEAD;
             $plData = $cache['tracks'];
             $origData = $cache['orig-tracks'];
             $enc = '';
-            switch($type) {
-                case 'html' :
+            switch ($type) {
+                case 'html':
                     $enc = $this->playlistAsHTML($plID, $origData);
                     break;
-                case 'json' :
-                default :
+                case 'json':
+                default:
                     $enc = $this->playlistAsJson($plData);
                     break;
             }
             echo $enc;
         } elseif (isset($_GET['get'])) {
-            $md5 = $_GET['get'];
-            if (!isset($_GET['key']) || $this->calcAccessKey($md5) != $_GET['key']) {
+            $md5 = strtoupper($_GET['get']);
+            if (!isset($_GET['key']) || $this->calcAccessKey($md5) != strtoupper($_GET['key'])) {
                 $this->error('Need key.');
             }
             if (preg_match('/^[A-F0-9]+$/', $md5) == 0) {
@@ -242,7 +283,6 @@ HEAD;
             echo json_encode(array_keys($this->playlists), JSON_PRETTY_PRINT);
         }
     }
-
 }
 
 $app = new Main;
