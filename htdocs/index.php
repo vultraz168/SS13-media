@@ -238,12 +238,15 @@ HEAD;
             $plID = filter_input(INPUT_GET, 'playlist');
 
             if (Config::API_KEY != '' && $type != 'html') {
-                if (!isset($_GET['key']) || $_GET['key'] != Config::API_KEY) {
+                if (!isset($_GET['key'])) {
                     $this->error('Need key.');
+                }
+                if($_GET['key'] != Config::API_KEY) {
+                    $this->error('Bad key.');
                 }
             }
             if (preg_match('/^[a-zA-Z0-9]+$/', $plID) == 0) {
-                $this->error('Bad request.');
+                $this->error('Bad request. Playlist ID does not match [a-zA-Z0-9]+');
             }
             if(!array_key_exists($plID, $this->playlists)){
                 $this->error('Playlist does not exist.');
@@ -270,8 +273,13 @@ HEAD;
             echo $enc;
         } elseif (isset($_GET['get'])) {
             $md5 = strtoupper($_GET['get']);
-            if (!isset($_GET['key']) || $this->calcAccessKey($md5) != strtoupper($_GET['key'])) {
-                $this->error('Need key.');
+            if(CONFIG::API_KEY != '') {
+                if (!isset($_GET['key'])) {
+                    $this->error('Need key.');
+                }
+                if($this->calcAccessKey($md5) != strtoupper($_GET['key'])) {
+                    $this->error('Bad key.');
+                }
             }
             if (preg_match('/^[A-F0-9]+$/', $md5) == 0) {
                 $this->error('Bad request.');
