@@ -1,1 +1,7 @@
 *.mp3
+/.check-identity
+/.pre-commit-config.yaml
+/.project
+/.remote-sync.json
+/config.php
+*.bak

@@ -15,7 +15,12 @@ class Config
     // Relative path to pool of MP3s
     const POOL_PATH = '/files';
 
+    // The root path of index.php, minus /index.php.
+    // For instance, if you had to get to it by the URL https://sub.domain.tld/index.php:
     const ROOT_URL = "http://sub.domain.tld";
+    // A secret password provided to the server's media code.
+    // This can be anything you like, but must be set on the SS13 server as well.
+    // You can also set this to '' to not require any keys at all.
     const API_KEY = "SECRET DO NOT SHARE";
 
     public static function getWebRoot()
