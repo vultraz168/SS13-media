@@ -97,7 +97,9 @@ class Main
          'title': '',
          'album': '',
          'artist': '',
-         'playtime_seconds': ''
+         'orig_filename': '',
+         'playtime_seconds': '',
+         'md5': ''
          }
          */
         $file = Config::getPoolDir() . '/fileData.json';
@@ -118,6 +120,7 @@ class Main
             $attr->title = isset($fileInfo['title']) ? $fileInfo['title'] : '';
             $attr->artist = isset($fileInfo['artist']) ? $fileInfo['artist'] : '';
             $attr->album = isset($fileInfo['album']) ? $fileInfo['album'] : '';
+            $attr->orig_filename = isset($fileInfo['orig_filename']) ? $fileInfo['orig_filename'] : '';
 
             if (isset($fileInfo['playtime_seconds'])) {
                 $attr->length = (string) floor(floatval($fileInfo['playtime_seconds']) * 10);
@@ -245,8 +248,8 @@ HEAD;
                     $this->error('Bad key.');
                 }
             }
-            if (preg_match('/^[a-zA-Z0-9]+$/', $plID) == 0) {
-                $this->error('Bad request. Playlist ID does not match [a-zA-Z0-9]+');
+            if (preg_match('/^[a-zA-Z0-9\-]+$/', $plID) == 0) {
+                $this->error('Bad request. Playlist ID does not match regex [a-zA-Z0-9\-]+');
             }
             if(!array_key_exists($plID, $this->playlists)){
                 $this->error('Playlist does not exist.');

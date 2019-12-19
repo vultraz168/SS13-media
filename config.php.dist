@@ -4,8 +4,15 @@ class Config
 {
     const ROOT_PATH = ROOT_PATH;
 
+    // Directory of public files relative to vhost root.
+    // On N3X15's server, for instance, uses a layout like /host/hostname.tld/htdocs/index.htm
+    // We can therefore put stuff that doesn't need to be exposed in /host/hostname.tld, and
+    // just the public files can go in htdocs.
+    // If you have to put the public files with the private files, set this to '.'
     const WEBROOT_PATH = "/htdocs";
+    // Relative path to cache files.
     const CACHE_PATH = "/cache";
+    // Relative path to pool of MP3s
     const POOL_PATH = '/files';
 
     const ROOT_URL = "http://sub.domain.tld";
