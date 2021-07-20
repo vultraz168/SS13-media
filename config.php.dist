@@ -3,6 +3,7 @@ define('ROOT_PATH', dirname(__file__));
 class Config
 {
     const EXT = "mp3";
+    const MIME_TYPE = "audio/mpeg";
     const ROOT_PATH = ROOT_PATH;
 
     // Directory of public files relative to vhost root.
